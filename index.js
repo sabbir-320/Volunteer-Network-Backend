@@ -4,6 +4,8 @@ const bodyParser = require('body-parser')
 const fileUpload = require('express-fileupload');
 const multer = require('multer')
 const MongoClient = require('mongodb').MongoClient;
+const fs = require('fs-extra')
+const ObjectId = require('mongodb').ObjectID;
 require('dotenv').config()
 
 // app config
@@ -30,33 +32,74 @@ client.connect(err => {
       })
   })
 
-  app.post('/addVolunteer', (req, res) => {
+  app.post('/addTask', (req, res) => {
     const file = req.files.file
     const title = req.body.title
-    const date = req.body.date
-    const discription = req.body.discription
-    console.log(title, date, discription, file);
-    file.mv(`${__dirname}/volunteers/${file.name}`, err => {
+
+    console.log(req.body);
+    const filePath = `${__dirname}/volunteers/${file.name}`
+    file.mv(filePath, err => {
       if (err) {
         console.log(err);
-        return res.status(5000).send({ msg: 'image upload is failed...' })
+        return res.status(500).send({ msg: 'file upload failed' })
       }
-      return res.send({ name: file.name, path: `${file.name}` })
+      const newImg = fs.readFileSync(filePath)
+      const encImg = newImg.toString('base64')
+      const image = {
+        contentType: req.files.file.mimetype,
+        size: req.files.file.size,
+        img: Buffer(encImg, 'base64')
+      }
+
+      collection.insertOne({ title, image })
+        .then(result => {
+          fs.remove(filePath, error => {
+            if (error) {
+              console.log(error);
+              res.status(500).send({ msg: 'file upload failed' })
+            }
+            res.send(result.insertedCount > 0)
+          })
+        })
     })
   })
 
   // get grud 
-  app.get('/userEvent', (req, res) => {
-    collection.find({ email: req.query.email })
-      .toArray((err, documents) => {
-        res.send(documents)
-      })
-  })
-
-  app.get('/allUser', (req, res) => {
+  app.get('/volunteerItems', (req, res) => {
     collection.find({})
       .toArray((err, documents) => {
         res.send(documents);
+      })
+  })
+
+  app.get('/register/:id', (req, res) => {
+    collection.find({
+      _id: ObjectId(`${req.params.id}`)
+    })
+      .toArray((err, document) => {
+        res.send(document)
+        console.log(err);
+      })
+  })
+
+  // perticuler user item
+  app.get('/registerdItem/:_id', (req, res) => {
+    console.log(req.params.id);
+    collection.find({
+      _id: ObjectId(`${req.params.id}`)
+    })
+      .toArray((err, document) => {
+        console.log(document);
+        res.send(document)
+        console.log(err);
+      })
+  })
+
+  // app grud by email
+  app.get('/volunteerByEmail', (req, res) => {
+    collection.find({ email: req.query.email })
+      .toArray((err, document) => {
+        res.send(document)
       })
   })
 
@@ -69,8 +112,5 @@ client.connect(err => {
 
 });
 
-app.get('/', (req, res) => {
-  res.send('hello world')
-})
-app.listen(5000)
-console.log('5000 Port successfully run');
+
+app.listen(5000, () => console.log('run successfully......'))
